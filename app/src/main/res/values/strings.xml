@@ -1,0 +1,75 @@
+<resources>
+    <string name="app_name">TestingCast</string>
+
+    <!-- Home -->
+    <string name="home_title">Screen mirroring</string>
+    <string name="home_subtitle">Mirror a phone or tablet to a TV or another Android device on the same Wi-Fi, hotspot or Wi-Fi Direct.</string>
+    <string name="home_send_title">Cast this screen</string>
+    <string name="home_send_body">Find a receiver and mirror this device\'s screen and audio.</string>
+    <string name="home_receive_title">Receive</string>
+    <string name="home_receive_body">Show another device\'s screen here. Best on Android TV.</string>
+
+    <!-- Sender -->
+    <string name="sender_title">Cast this screen</string>
+    <string name="sender_devices">Receivers</string>
+    <string name="sender_scan">Scan</string>
+    <string name="sender_stop_scan">Stop scan</string>
+    <string name="sender_scanning">Searching nearby receivers…</string>
+    <string name="sender_no_devices">No receivers yet. Open TestingCast on the TV and choose Receive.</string>
+    <string name="sender_manual">Connect by IP (hotspot / other networks)</string>
+    <string name="sender_manual_host">Receiver IP</string>
+    <string name="sender_manual_port">Port</string>
+    <string name="sender_connect">Connect</string>
+    <string name="sender_disconnect">Disconnect</string>
+    <string name="sender_start">Start mirroring</string>
+    <string name="sender_stop">Stop mirroring</string>
+    <string name="sender_quality">Quality</string>
+    <string name="sender_resolution">Resolution</string>
+    <string name="sender_bitrate">Bitrate</string>
+    <string name="sender_fps">Frame rate</string>
+    <string name="sender_quality_locked">Quality changes apply the next time mirroring starts.</string>
+    <string name="sender_bitrate_value">%1$.1f Mbps</string>
+    <string name="sender_fps_value">%1$d fps</string>
+    <string name="sender_type_wifi">Wi-Fi</string>
+    <string name="sender_type_p2p">Wi-Fi Direct</string>
+    <string name="sender_mirroring_info">Mirroring %1$d×%2$d · audio %3$s</string>
+    <string name="audio_on">on</string>
+    <string name="audio_off">off</string>
+
+    <!-- Connection states -->
+    <string name="state_disconnected">Not connected</string>
+    <string name="state_searching">Waiting for a sender</string>
+    <string name="state_connecting">Connecting to %1$s…</string>
+    <string name="state_connected">Connected to %1$s</string>
+    <string name="state_streaming">Streaming with %1$s</string>
+    <string name="state_error">Error: %1$s</string>
+
+    <!-- Messages -->
+    <string name="msg_invalid_host">Enter a valid IP address or hostname.</string>
+    <string name="msg_invalid_port">Port must be between 1 and 65535.</string>
+    <string name="msg_connection_failed">Could not connect to the receiver.</string>
+    <string name="msg_not_connected">Connect to a receiver first.</string>
+    <string name="msg_capture_denied">Screen capture permission was denied.</string>
+
+    <!-- Receiver -->
+    <string name="receiver_waiting_title">Ready to receive</string>
+    <string name="receiver_name">Visible as %1$s</string>
+    <string name="receiver_address">IP %1$s · port %2$d</string>
+    <string name="receiver_no_address">No local network address. Connect to Wi-Fi or enable hotspot.</string>
+    <string name="receiver_hint">On your phone open TestingCast → Cast this screen and pick this device.</string>
+    <string name="receiver_buffering">Waiting for video from %1$s…</string>
+    <string name="receiver_overlay_hint">Press OK to toggle info · Back to exit</string>
+    <string name="receiver_stream_info">%1$d×%2$d · audio %3$s</string>
+
+    <!-- Service -->
+    <string name="notification_channel_capture">Screen mirroring</string>
+    <string name="notification_capture_title">Mirroring your screen</string>
+    <string name="notification_capture_text">Your screen is being sent to the receiver.</string>
+    <string name="action_stop_mirroring">Stop</string>
+    <string name="error_capture_permission">Screen capture permission missing.</string>
+    <string name="error_not_connected">Not connected to a receiver.</string>
+    <string name="error_connection_lost">Connection to the receiver was lost.</string>
+    <string name="error_capture_failed">Capture failed: %1$s</string>
+
+    <string name="back">Back</string>
+</resources>
