@@ -24,6 +24,16 @@ class StreamQualityTest {
     }
 
     @Test
+    fun `rotating display to landscape swaps capture size so landscape fills the frame`() {
+        val portrait = CaptureSizeCalculator.compute(1080, 2400, ResolutionOption.HD_720)
+        val landscape = CaptureSizeCalculator.compute(2400, 1080, ResolutionOption.HD_720)
+
+        assertEquals(CaptureSize(1600, 720), landscape)
+        assertEquals(portrait.width, landscape.height)
+        assertEquals(portrait.height, landscape.width)
+    }
+
+    @Test
     fun `never upscales a small display`() {
         val size = CaptureSizeCalculator.compute(800, 480, ResolutionOption.FHD_1080)
 

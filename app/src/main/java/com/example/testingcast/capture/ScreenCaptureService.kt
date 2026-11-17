@@ -22,6 +22,7 @@ import android.os.IBinder
 import android.os.Looper
 import android.util.DisplayMetrics
 import android.util.Log
+import android.view.Display
 import android.view.WindowManager
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
@@ -43,6 +44,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 /**
@@ -87,6 +90,20 @@ class ScreenCaptureService : Service() {
     private var audioEncoder: AudioEncoder? = null
     private var sessionJob: Job? = null
     private var isStopping = false
+    private var activeQuality: StreamQuality? = null
+    private var captureSize: CaptureSize? = null
+
+    /** Serialises video pipeline rebuilds (rotation) against teardown. */
+    private val videoMutex = Mutex()
+
+    /** Rebuilds the video pipeline when the phone rotates so landscape content fills the frame. */
+    private val displayListener = object : DisplayManager.DisplayListener {
+        override fun onDisplayAdded(displayId: Int) = Unit
+        override fun onDisplayRemoved(displayId: Int) = Unit
+        override fun onDisplayChanged(displayId: Int) {
+            if (displayId == Display.DEFAULT_DISPLAY) scope.launch { followDisplayRotation() }
+        }
+    }
 
     private val projectionCallback = object : MediaProjection.Callback() {
         override fun onStop() {
@@ -138,8 +155,7 @@ class ScreenCaptureService : Service() {
                 stopCapture(CaptureStatus.Failed(getString(R.string.error_not_connected)))
                 return
             }
-            val (displayWidth, displayHeight) = displaySize()
-            val size = CaptureSizeCalculator.compute(displayWidth, displayHeight, quality.resolution)
+            val size = currentCaptureSize(quality)
             val encoder = VideoEncoder(size, quality) { packet -> repository.sendPacket(packet) }
             videoEncoder = encoder
             val surface = withContext(Dispatchers.IO) { encoder.prepare() }
@@ -147,10 +163,13 @@ class ScreenCaptureService : Service() {
                 VIRTUAL_DISPLAY_NAME, size.width, size.height, resources.displayMetrics.densityDpi,
                 DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR, surface, null, null
             )
+            activeQuality = quality
+            captureSize = size
             repository.sendPacket(MediaProtocol.videoFormatPacket(VideoFormatInfo(size.width, size.height)))
             encoder.startDraining(scope)
             val audioEnabled = startAudio(mediaProjection)
             captureStatus.value = CaptureStatus.Active(size.width, size.height, audioEnabled)
+            displayManager.registerDisplayListener(displayListener, Handler(Looper.getMainLooper()))
             scope.launch { listenForKeyFrameRequests() }
 
             repository.connectionState.first { it is ConnectionState.Disconnected || it is ConnectionState.Error }
@@ -177,6 +196,41 @@ class ScreenCaptureService : Service() {
         return started
     }
 
+    /**
+     * Swaps in a new encoder sized to the current orientation and resizes the VirtualDisplay
+     * (allowed on API 34+, unlike creating a second one). The receiver re-configures its decoder
+     * on the new VIDEO_FORMAT packet, so landscape content is no longer letterboxed inside a
+     * portrait frame.
+     */
+    private suspend fun followDisplayRotation() = videoMutex.withLock {
+        val display = virtualDisplay ?: return@withLock
+        val quality = activeQuality ?: return@withLock
+        val newSize = currentCaptureSize(quality)
+        if (isStopping || newSize == captureSize) return@withLock
+        Log.d(TAG, "Display rotated; resizing capture to ${newSize.width}x${newSize.height}")
+        val newEncoder = VideoEncoder(newSize, quality) { packet -> repository.sendPacket(packet) }
+        try {
+            val surface = withContext(Dispatchers.IO) { newEncoder.prepare() }
+            display.resize(newSize.width, newSize.height, resources.displayMetrics.densityDpi)
+            display.surface = surface
+            videoEncoder?.release()
+            videoEncoder = newEncoder
+            captureSize = newSize
+            repository.sendPacket(MediaProtocol.videoFormatPacket(VideoFormatInfo(newSize.width, newSize.height)))
+            newEncoder.startDraining(scope)
+            val status = captureStatus.value
+            if (status is CaptureStatus.Active) {
+                captureStatus.value = status.copy(width = newSize.width, height = newSize.height)
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to follow display rotation", e)
+            newEncoder.release()
+            stopCapture(CaptureStatus.Failed(getString(R.string.error_capture_failed, e.message ?: "")))
+        }
+    }
+
     private suspend fun listenForKeyFrameRequests() {
         repository.incomingPackets.collect { packet ->
             val command = StreamPacket.parseControlCommand(packet)?.first
@@ -196,12 +250,15 @@ class ScreenCaptureService : Service() {
         }
     }
 
-    private suspend fun releaseCapture() {
+    private suspend fun releaseCapture() = videoMutex.withLock {
+        displayManager.unregisterDisplayListener(displayListener)
         if (repository.connectionState.value is ConnectionState.Streaming) {
             runCatching { repository.stopStreaming() }
         }
         videoEncoder?.release()
         videoEncoder = null
+        captureSize = null
+        activeQuality = null
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) audioEncoder?.release()
         audioEncoder = null
         virtualDisplay?.release()
@@ -229,15 +286,24 @@ class ScreenCaptureService : Service() {
         )
     }.getOrNull()
 
+    private val displayManager get() = getSystemService(DisplayManager::class.java)
+
+    private fun currentCaptureSize(quality: StreamQuality): CaptureSize {
+        val (displayWidth, displayHeight) = displaySize()
+        return CaptureSizeCalculator.compute(displayWidth, displayHeight, quality.resolution)
+    }
+
+    /** Reads the default display's size in its *current* rotation (fresh display context each call). */
     private fun displaySize(): Pair<Int, Int> {
-        val windowManager = getSystemService(WindowManager::class.java)
+        val display = displayManager.getDisplay(Display.DEFAULT_DISPLAY)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val windowManager = createDisplayContext(display).getSystemService(WindowManager::class.java)
             val bounds = windowManager.maximumWindowMetrics.bounds
             return bounds.width() to bounds.height()
         }
         val metrics = DisplayMetrics()
         @Suppress("DEPRECATION")
-        windowManager.defaultDisplay.getRealMetrics(metrics)
+        display.getRealMetrics(metrics)
         return metrics.widthPixels to metrics.heightPixels
     }
 
